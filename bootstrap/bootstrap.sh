@@ -374,13 +374,20 @@ if [ "${ACTION}" = "create" ]; then
   echo
   echo "=== Bootstrap complete. ==="
   echo
-  echo "Set these as GitHub repo variables (Settings --> Secrets and variables --> Actions):"
+  echo "Set these as GitHub repo SECRETS (Settings --> Secrets and variables --> Actions --> Secrets):"
   echo "-  TF_STATE_BUCKET        = ${STATE_BUCKET}"
   echo "-  TF_STATE_KMS_KEY       = arn:aws:kms:${AWS_REGION}:${ACCOUNT_ID}:alias/terraform-state"
   echo "-  TF_PLAN_ROLE_ARN       = arn:aws:iam::${ACCOUNT_ID}:role/terraform-plan"
   echo "-  TF_APPLY_DEV_ROLE_ARN  = arn:aws:iam::${ACCOUNT_ID}:role/terraform-apply-dev"
   echo "-  TF_APPLY_PROD_ROLE_ARN = arn:aws:iam::${ACCOUNT_ID}:role/terraform-apply-prod"
+  echo
+  echo "Set this as a GitHub repo VARIABLE (Settings --> Secrets and variables --> Actions --> Variables):"
   echo "-  AWS_REGION             = ${AWS_REGION}"
+  echo
+  echo "ACM_CERTIFICATE_ARN also needs to be set as a secret on the 'dev' GitHub"
+  echo "Environment (Settings --> Environments --> dev), separately from the repo"
+  echo "secrets above - it's environment-specific and terraform-apply-dev.yml reads"
+  echo "it via that scope."
 fi
 
 if [ "${ACTION}" = "destroy" ]; then
