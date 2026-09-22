@@ -1,12 +1,12 @@
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.name_prefix}-subnet-group"
+  name       = "${var.identifier}-subnet-group"
   subnet_ids = var.subnet_ids
 
-  tags = merge(var.tags, { Name = "${var.name_prefix}-subnet-group" })
+  tags = merge(var.tags, { Name = "${var.identifier}-subnet-group" })
 }
 
 resource "aws_db_parameter_group" "main" {
-  name   = "${var.name_prefix}-pg18"
+  name   = "${var.identifier}-pg18"
   family = "postgres18"
 
   # Enforce SSL for all connections
@@ -25,7 +25,7 @@ resource "aws_db_parameter_group" "main" {
 
   parameter {
     name         = "log_connections"
-    value        = "1"
+    value        = "all"
     apply_method = "immediate"
   }
 
@@ -42,13 +42,13 @@ resource "aws_db_parameter_group" "main" {
     apply_method = "immediate"
   }
 
-  tags = merge(var.tags, { Name = "${var.name_prefix}-pg18" })
+  tags = merge(var.tags, { Name = "${var.identifier}-pg18" })
 
   lifecycle { create_before_destroy = true }
 }
 
 resource "aws_iam_role" "rds_monitoring" {
-  name = "${var.name_prefix}-rds-monitoring"
+  name = "${var.identifier}-rds-monitoring"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -91,7 +91,9 @@ resource "aws_db_instance" "main" {
   parameter_group_name   = aws_db_parameter_group.main.name
   vpc_security_group_ids = var.security_group_ids
 
-  publicly_accessible                 = false
+  publicly_accessible = false
+
+  #checkov:skip=CKV_AWS_157:multi_az is intentionally environment-scoped
   multi_az                            = var.environment == "prod"
   iam_database_authentication_enabled = true
 
@@ -100,6 +102,7 @@ resource "aws_db_instance" "main" {
   maintenance_window      = "sun:04:00-sun:05:00"
   copy_tags_to_snapshot   = true
 
+  #checkov:skip=CKV_AWS_293:deletion_protection is intentionally environment-scoped
   deletion_protection       = var.environment == "prod"
   skip_final_snapshot       = var.environment != "prod"
   final_snapshot_identifier = var.environment == "prod" ? "${var.identifier}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null

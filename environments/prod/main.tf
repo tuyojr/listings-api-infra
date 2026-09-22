@@ -40,7 +40,6 @@ module "secrets" {
 module "auth_db" {
   source = "../../modules/database"
 
-  name_prefix           = local.name_prefix
   identifier            = "${local.name_prefix}-auth"
   subnet_ids            = module.network.private_subnet_ids
   security_group_ids    = [module.network.rds_security_group_id]
@@ -56,7 +55,6 @@ module "auth_db" {
 module "listings_db" {
   source = "../../modules/database"
 
-  name_prefix           = local.name_prefix
   identifier            = "${local.name_prefix}-listings"
   subnet_ids            = module.network.private_subnet_ids
   security_group_ids    = [module.network.rds_security_group_id]

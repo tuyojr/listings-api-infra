@@ -1,8 +1,3 @@
-variable "name_prefix" {
-  type        = string
-  description = "Prefix for resource names"
-}
-
 variable "identifier" {
   type        = string
   description = "RDS instance identifier"
