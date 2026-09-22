@@ -3,14 +3,14 @@ name: Terraform CI
 on:
   pull_request:
     paths:
-      - "utilities/**"
+      - "modules/**"
       - "environments/**"
       - ".tflint.hcl"
       - ".github/workflows/terraform-ci.yml"
   push:
     branches: [main, dev]
     paths:
-      - "utilities/**"
+      - "modules/**"
       - "environments/**"
       - ".tflint.hcl"
       - ".github/workflows/terraform-ci.yml"
@@ -63,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t tf_dirs < <(find utilities environments -type f -name '*.tf' -not -path '*/examples/*' -printf '%h\n' | sort -u)
+          mapfile -t tf_dirs < <(find modules environments -type f -name '*.tf' -not -path '*/examples/*' -printf '%h\n' | sort -u)
 
           if [ "${#tf_dirs[@]}" -eq 0 ]; then
             echo "No Terraform directories found."
