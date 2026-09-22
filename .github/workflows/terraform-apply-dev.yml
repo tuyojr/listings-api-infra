@@ -25,7 +25,7 @@ env:
 jobs:
   apply:
     name: Apply dev
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     environment:
       name: dev
     steps:
