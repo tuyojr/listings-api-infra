@@ -11,14 +11,14 @@
 #
 # Safe to re-run since every step checks for existence of a resource first.
 #
-# Run from AWS CloudShell:  bash bootstrap/bootstrap.sh <github-org>/<github-repo>
+# Run from AWS CloudShell:  bash bootstrap/bootstrap.sh <github-username>/<github-repo>
 # The -destroy action is destructive and requires typed confirmation.
 
 set -euo pipefail
 
 usage() {
   cat <<EOF
-usage: $0 {-create|-destroy} [<github-org>/<github-repo>]
+usage: $0 {-create|-destroy} [<github-username>/<github-repo>]
 
   -create   Provision the state bucket, KMS key, OIDC provider, and
             IAM roles. Requires the GitHub repository identifier so the
@@ -29,7 +29,7 @@ usage: $0 {-create|-destroy} [<github-org>/<github-repo>]
             (AWS does not allow immediate key deletion).
 
   Examples:
-    $0 -create  tuyojr/realestate-microservices
+    $0 -create  tuyojr/listings-api
     $0 -destroy
 EOF
 }
