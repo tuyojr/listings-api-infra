@@ -247,11 +247,79 @@ EOF
   create_role "terraform-apply-prod" "repo:${REPO_PATTERN}:environment:prod"
 
   # The plan role runs on PRs. On a public repo "anyone can open a PR",
-  # so this role is deliberately narrow.
+  # so this role is deliberately narrow: broad read visibility (for an
+  # accurate plan) plus, below, just enough write access to the state
+  # backend to take the lock.
   echo "░░ attaching ReadOnlyAccess to terraform-plan ░░"
   aws iam attach-role-policy \
     --role-name terraform-plan \
     --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
+
+  # Even a read-only plan has to take the S3 native state lock, which
+  # means writing a .tflock object and using the state bucket's KMS key.
+  local state_kms_arn
+  state_kms_arn=$(aws kms describe-key --key-id "${KMS_ALIAS}" --query 'KeyMetadata.Arn' --output text)
+
+  put_state_backend_policy() {
+    local role_name="$1"
+    shift
+    local env_prefixes=("$@")
+    local resources_json
+
+    resources_json=$(printf '%s\n' "${env_prefixes[@]}" | jq -R \
+      --arg bucket "${STATE_BUCKET}" \
+      '"arn:aws:s3:::" + $bucket + "/" + . + "/terraform.tfstate*"' | jq -s .)
+
+    echo "░░ putting state-backend policy on ${role_name} (${env_prefixes[*]}) ░░"
+    aws iam put-role-policy \
+      --role-name "${role_name}" \
+      --policy-name "state-backend" \
+      --policy-document "$(jq -n \
+        --argjson resources "${resources_json}" \
+        --arg bucket_arn "arn:aws:s3:::${STATE_BUCKET}" \
+        --arg kms_arn "${state_kms_arn}" \
+        '{
+          Version: "2012-10-17",
+          Statement: [
+            { Sid: "StateBucketList", Effect: "Allow", Action: "s3:ListBucket", Resource: $bucket_arn },
+            { Sid: "StateObjectAccess", Effect: "Allow", Action: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource: $resources },
+            { Sid: "StateKmsAccess", Effect: "Allow", Action: ["kms:GenerateDataKey", "kms:Decrypt", "kms:DescribeKey"], Resource: $kms_arn }
+          ]
+        }')"
+  }
+
+  put_state_backend_policy "terraform-plan" "dev" "prod"
+  put_state_backend_policy "terraform-apply-dev" "dev"
+  put_state_backend_policy "terraform-apply-prod" "prod"
+
+  # Resource-management policy for the two apply roles. Scoped to an
+  # allow-list of the AWS services our Terraform config actually manages
+  echo "░░ putting apply-resources policy on terraform-apply-dev and terraform-apply-prod ░░"
+  local apply_policy
+  apply_policy=$(jq -n --arg account "${ACCOUNT_ID}" '{
+    Version: "2012-10-17",
+    Statement: [
+      { Sid: "Ec2Full", Effect: "Allow", Action: "ec2:*", Resource: "*" },
+      { Sid: "RdsFull", Effect: "Allow", Action: "rds:*", Resource: "*" },
+      { Sid: "EcsFull", Effect: "Allow", Action: "ecs:*", Resource: "*" },
+      { Sid: "ElbFull", Effect: "Allow", Action: "elasticloadbalancing:*", Resource: "*" },
+      { Sid: "SecretsManagerFull", Effect: "Allow", Action: "secretsmanager:*", Resource: "*" },
+      { Sid: "KmsFull", Effect: "Allow", Action: "kms:*", Resource: "*" },
+      { Sid: "EcrFull", Effect: "Allow", Action: "ecr:*", Resource: "*" },
+      { Sid: "LogsFull", Effect: "Allow", Action: "logs:*", Resource: "*" },
+      { Sid: "S3ManagedBuckets", Effect: "Allow", Action: "s3:*", Resource: ["arn:aws:s3:::listings-*", "arn:aws:s3:::listings-*/*"] },
+      { Sid: "IamRoleManagement", Effect: "Allow", Action: [
+          "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:TagRole", "iam:UntagRole",
+          "iam:UpdateRole", "iam:UpdateAssumeRolePolicy", "iam:PutRolePolicy", "iam:DeleteRolePolicy",
+          "iam:GetRolePolicy", "iam:ListRolePolicies", "iam:AttachRolePolicy", "iam:DetachRolePolicy",
+          "iam:ListAttachedRolePolicies", "iam:PassRole"
+        ], Resource: ("arn:aws:iam::" + $account + ":role/listings-*") },
+      { Sid: "StsIdentity", Effect: "Allow", Action: "sts:GetCallerIdentity", Resource: "*" }
+    ]
+  }')
+
+  aws iam put-role-policy --role-name terraform-apply-dev  --policy-name "apply-resources" --policy-document "${apply_policy}"
+  aws iam put-role-policy --role-name terraform-apply-prod --policy-name "apply-resources" --policy-document "${apply_policy}"
 }
 
 destroy() {
