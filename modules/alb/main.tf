@@ -80,6 +80,7 @@ resource "aws_lb" "main" {
 
   #checkov:skip=CKV_AWS_150:deletion protection is intentionally environment-gated - dev may still be rebuilt during setup even while temporarily serving production traffic
   #checkov:skip=CKV2_AWS_28:no WAF requirement at this project's current scale; add aws_wafv2_web_acl + association here if that changes
+  #checkov:skip=CKV2_AWS_20:only applies when enable_https is true; no ACM certificate is available for this environment yet, see var.enable_https
   enable_deletion_protection = var.environment == "prod"
   enable_http2               = true
   drop_invalid_header_fields = true
@@ -94,6 +95,8 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_listener" "http_redirect" {
+  count = var.enable_https ? 1 : 0
+
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
@@ -110,7 +113,30 @@ resource "aws_lb_listener" "http_redirect" {
   tags = var.tags
 }
 
+resource "aws_lb_listener" "http" {
+  count = var.enable_https ? 0 : 1
+
+  load_balancer_arn = aws_lb.main.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  #checkov:skip=CKV_AWS_2:no ACM certificate available yet for this environment - see var.enable_https.
+  #checkov:skip=CKV_AWS_103:plain HTTP listener has no TLS policy to set - same reason as CKV_AWS_2 above.
+  default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Not Found"
+      status_code  = "404"
+    }
+  }
+
+  tags = var.tags
+}
+
 resource "aws_lb_listener" "https" {
+  count = var.enable_https ? 1 : 0
+
   load_balancer_arn = aws_lb.main.arn
   port              = 443
   protocol          = "HTTPS"
@@ -132,7 +158,7 @@ resource "aws_lb_listener" "https" {
 resource "aws_lb_listener_rule" "service" {
   for_each = var.target_groups
 
-  listener_arn = aws_lb_listener.https.arn
+  listener_arn = var.enable_https ? aws_lb_listener.https[0].arn : aws_lb_listener.http[0].arn
   priority     = each.value.priority
 
   action {

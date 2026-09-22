@@ -14,6 +14,6 @@ output "zone_id" {
 }
 
 output "https_listener_arn" {
-  value       = aws_lb_listener.https.arn
-  description = "HTTPS listener ARN"
+  value       = var.enable_https ? aws_lb_listener.https[0].arn : null
+  description = "HTTPS listener ARN, or null when enable_https is false"
 }

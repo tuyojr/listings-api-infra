@@ -13,9 +13,21 @@ variable "security_group_ids" {
   description = "Security group IDs for the ALB"
 }
 
+variable "enable_https" {
+  type        = bool
+  description = "Create the HTTPS listener and redirect HTTP to it. Set false when no ACM certificate is available yet - the ALB then serves plain HTTP on port 80."
+  default     = true
+}
+
 variable "certificate_arn" {
   type        = string
-  description = "ACM certificate ARN for HTTPS"
+  description = "ACM certificate ARN for HTTPS. Required when enable_https is true."
+  default     = null
+
+  validation {
+    condition     = !var.enable_https || var.certificate_arn != null
+    error_message = "certificate_arn is required when enable_https is true."
+  }
 }
 
 variable "elb_log_delivery_account_id" {

@@ -203,7 +203,7 @@ module "alb" {
   name_prefix        = local.name_prefix
   public_subnet_ids  = module.network.public_subnet_ids
   security_group_ids = [module.network.alb_security_group_id]
-  certificate_arn    = var.acm_certificate_arn
+  enable_https       = false
   environment        = local.environment
 
   target_groups = {

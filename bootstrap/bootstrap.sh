@@ -468,10 +468,9 @@ if [ "${ACTION}" = "create" ]; then
   echo "Set this as a GitHub repo VARIABLE (Settings --> Secrets and variables --> Actions --> Variables):"
   echo "-  AWS_REGION             = ${AWS_REGION}"
   echo
-  echo "ACM_CERTIFICATE_ARN also needs to be set as a secret on the 'dev' GitHub"
-  echo "Environment (Settings --> Environments --> dev), separately from the repo"
-  echo "secrets above - it's environment-specific and terraform-apply-dev.yml reads"
-  echo "it via that scope."
+  echo "dev currently runs the ALB on plain HTTP (no ACM certificate available)."
+  echo "When prod gets its own apply workflow, it will need ACM_CERTIFICATE_ARN"
+  echo "set as a secret on the 'prod' GitHub Environment."
 fi
 
 if [ "${ACTION}" = "destroy" ]; then
