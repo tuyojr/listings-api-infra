@@ -1,0 +1,160 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - "utilities/**"
+      - "environments/**"
+      - ".github/workflows/terraform-plan.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-plan-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_VERSION: "1.16.0"
+
+jobs:
+  plan:
+    name: Plan ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, prod]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.TF_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gha-tf-plan-${{ matrix.environment }}-${{ github.run_id }}
+          mask-aws-account-id: true
+          role-duration-seconds: 3600
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive -diff
+
+      - name: Terraform init
+        working-directory: environments/${{ matrix.environment }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ matrix.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="kms_key_id=${{ vars.TF_STATE_KMS_KEY }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true" \
+            -no-color
+
+      - name: Terraform validate
+        working-directory: environments/${{ matrix.environment }}
+        run: terraform validate -no-color
+
+      - name: Terraform plan
+        id: plan
+        working-directory: environments/${{ matrix.environment }}
+        run: |
+          set +e
+          terraform plan \
+            -lock-timeout=5m \
+            -no-color \
+            -out=tfplan \
+            2>&1 | tee plan.txt
+          echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Post plan to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9.0.0
+        env:
+          ENVIRONMENT: ${{ matrix.environment }}
+          PLAN_EXIT: ${{ steps.plan.outputs.exitcode }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `environments/${process.env.ENVIRONMENT}/plan.txt`;
+            let plan = fs.readFileSync(path, 'utf8');
+
+            const MAX = 60000;
+            if (plan.length > MAX) {
+              plan = plan.slice(0, MAX) + '\n\n… truncated …';
+            }
+
+            plan = plan.replace(
+              /arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:[^\s"]*/g,
+              'arn:aws:…:<redacted>'
+            );
+
+            const body = [
+              `### Terraform Plan — \`${process.env.ENVIRONMENT}\``,
+              ``,
+              `Exit code: \`${process.env.PLAN_EXIT}\``,
+              ``,
+              `<details><summary>Show plan</summary>`,
+              ``,
+              '```terraform',
+              plan,
+              '```',
+              ``,
+              `</details>`,
+            ].join('\n');
+
+            const marker = `<!-- tf-plan-${process.env.ENVIRONMENT} -->`;
+            const fullBody = marker + '\n' + body;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: fullBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: fullBody,
+              });
+            }
+
+      - name: Fail if plan errored
+        if: steps.plan.outputs.exitcode != '0'
+        run: |
+          echo "::error::terraform plan failed for ${{ matrix.environment }}"
+          exit 1
