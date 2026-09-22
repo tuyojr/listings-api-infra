@@ -1,19 +1,7 @@
 name: Terraform CI
 
 on:
-  pull_request:
-    paths:
-      - "modules/**"
-      - "environments/**"
-      - ".tflint.hcl"
-      - ".github/workflows/terraform-ci.yml"
-  push:
-    branches: [main, dev]
-    paths:
-      - "modules/**"
-      - "environments/**"
-      - ".tflint.hcl"
-      - ".github/workflows/terraform-ci.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

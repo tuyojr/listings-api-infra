@@ -1,12 +1,7 @@
 name: Terraform Apply (dev)
 
 on:
-  push:
-    branches: [main, dev]
-    paths:
-      - "modules/**"
-      - "environments/dev/**"
-      - ".github/workflows/terraform-apply-dev.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
