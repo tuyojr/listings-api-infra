@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, dev]
     paths:
-      - "utilities/**"
+      - "modules/**"
       - "environments/dev/**"
       - ".github/workflows/terraform-apply-dev.yml"
   workflow_dispatch:
@@ -63,7 +63,14 @@ jobs:
 
       - name: Terraform plan
         working-directory: environments/dev
-        run: terraform plan -lock-timeout=5m -no-color -out=tfplan
+        env:
+          ACM_CERTIFICATE_ARN: ${{ secrets.ACM_CERTIFICATE_ARN }}
+        run: |
+          terraform plan \
+            -lock-timeout=5m \
+            -no-color \
+            -var="acm_certificate_arn=${ACM_CERTIFICATE_ARN}" \
+            -out=tfplan
 
       - name: Terraform apply
         working-directory: environments/dev
