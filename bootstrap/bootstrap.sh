@@ -10,7 +10,7 @@
 #      - terraform-apply-dev   (environment: dev)
 #      - terraform-apply-prod  (environment: prod)
 #
-# Safe to re-run — every step checks for existence first.
+# Safe to re-run since every step checks for existence of a resource first.
 #
 # Run from AWS CloudShell:  bash bootstrap/bootstrap.sh <github-org>/<github-repo>
 
