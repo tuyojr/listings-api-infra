@@ -74,7 +74,7 @@ jobs:
             echo "Initializing and validating: ${dir}"
             terraform -chdir="${dir}" init -backend=false -input=false -no-color
             terraform -chdir="${dir}" validate -no-color
-            echo "::endgroup::
+            echo "::endgroup::"
           done
 
       - name: Install TFLint plugins
