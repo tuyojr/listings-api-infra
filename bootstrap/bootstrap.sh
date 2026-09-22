@@ -77,6 +77,12 @@ KMS_ALIAS="alias/terraform-state"
 OIDC_URL="https://token.actions.githubusercontent.com"
 OIDC_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
 
+if [ -n "${GITHUB_REPO}" ]; then
+  GITHUB_OWNER="${GITHUB_REPO%%/*}"
+  GITHUB_REPO_NAME="${GITHUB_REPO#*/}"
+  REPO_PATTERN="${GITHUB_OWNER}@*/${GITHUB_REPO_NAME}@*"
+fi
+
 ROLES=(terraform-plan terraform-apply-dev terraform-apply-prod)
 
 echo "Account:      ${ACCOUNT_ID}"
@@ -88,8 +94,12 @@ echo
 
 create_role() {
   local name="$1"
-  local sub_claim="$2"
+  shift
+  local sub_claims=("$@")
   local trust_policy
+  local sub_json
+
+  sub_json=$(printf '%s\n' "${sub_claims[@]}" | jq -R . | jq -s .)
 
   trust_policy=$(cat <<EOF
 {
@@ -100,11 +110,11 @@ create_role() {
     "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
       "StringEquals": {
-        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:repository": "${GITHUB_REPO}"
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
       },
       "StringLike": {
-        "token.actions.githubusercontent.com:sub": "${sub_claim}"
+        "token.actions.githubusercontent.com:repository": "${REPO_PATTERN}",
+        "token.actions.githubusercontent.com:sub": ${sub_json}
       }
     }
   }]
@@ -226,9 +236,12 @@ EOF
     echo "==== OIDC provider created ===="
   fi
 
-  create_role "terraform-plan"       "repo:${GITHUB_REPO}:pull_request"
-  create_role "terraform-apply-dev"  "repo:${GITHUB_REPO}:environment:dev"
-  create_role "terraform-apply-prod" "repo:${GITHUB_REPO}:environment:prod"
+  create_role "terraform-plan" \
+    "repo:${REPO_PATTERN}:pull_request" \
+    "repo:${REPO_PATTERN}:ref:refs/heads/main" \
+    "repo:${REPO_PATTERN}:ref:refs/heads/dev"
+  create_role "terraform-apply-dev"  "repo:${REPO_PATTERN}:environment:dev"
+  create_role "terraform-apply-prod" "repo:${REPO_PATTERN}:environment:prod"
 
   # The plan role runs on PRs. On a public repo "anyone can open a PR",
   # so this role is deliberately narrow.
