@@ -9,10 +9,14 @@ variable "vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-variable "az_count" {
-  type        = number
-  description = "Number of availability zones to spread subnets across"
-  default     = 2
+variable "availability_zones" {
+  type        = list(string)
+  description = "Explicit availability zone names to spread subnets across, e.g. [\"us-east-1a\", \"us-east-1b\"]. Pinned explicitly rather than auto-discovered, so the subnet layout doesn't silently change if AWS adds a new AZ to the region."
+
+  validation {
+    condition     = length(var.availability_zones) >= 2
+    error_message = "availability_zones must contain at least 2 zones for subnet/NAT redundancy."
+  }
 }
 
 variable "single_nat_gateway" {
