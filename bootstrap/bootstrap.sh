@@ -192,7 +192,7 @@ EOF
     echo "░░ creating KMS key ░░"
 
     # We need to capture the key ID directly from create-key output. If we rely
-    # on `list-keys`, there's a possibilty it returns account-wide keys in unspecified
+    # on `list-keys`, there's a possibility it returns account-wide keys in unspecified
     # order, and Keys[-1] is not guaranteed to be the one just created.
     local key_id
     key_id=$(aws kms create-key \
