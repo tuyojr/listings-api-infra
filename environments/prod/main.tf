@@ -14,7 +14,7 @@ module "network" {
 
   name_prefix        = local.name_prefix
   vpc_cidr           = "10.20.0.0/16"
-  az_count           = 2
+  availability_zones = ["us-east-1a", "us-east-1b"]
   single_nat_gateway = false
 
   tags = local.tags
