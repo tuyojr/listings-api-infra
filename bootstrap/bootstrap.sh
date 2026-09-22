@@ -305,6 +305,8 @@ destroy() {
 
     while IFS=$'\t' read -r key version_id; do
       [ -z "${key:-}" ] && continue
+      [ "${key}" = "None" ] && continue
+      [ -z "${version_id:-}" ] && continue
       aws s3api delete-object \
         --bucket "${STATE_BUCKET}" \
         --key "${key}" \
@@ -317,6 +319,8 @@ destroy() {
 
     while IFS=$'\t' read -r key version_id; do
       [ -z "${key:-}" ] && continue
+      [ "${key}" = "None" ] && continue
+      [ -z "${version_id:-}" ] && continue
       aws s3api delete-object \
         --bucket "${STATE_BUCKET}" \
         --key "${key}" \
@@ -370,7 +374,7 @@ if [ "${ACTION}" = "create" ]; then
   echo
   echo "=== Bootstrap complete. ==="
   echo
-  echo "Set these as GitHub repo variables (Settings → Variables → Actions):"
+  echo "Set these as GitHub repo variables (Settings --> Secrets and variables --> Actions):"
   echo "-  TF_STATE_BUCKET        = ${STATE_BUCKET}"
   echo "-  TF_STATE_KMS_KEY       = arn:aws:kms:${AWS_REGION}:${ACCOUNT_ID}:alias/terraform-state"
   echo "-  TF_PLAN_ROLE_ARN       = arn:aws:iam::${ACCOUNT_ID}:role/terraform-plan"
