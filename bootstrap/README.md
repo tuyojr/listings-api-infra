@@ -22,7 +22,13 @@ This is used for a one-time setup on each AWS account. It ccreates:
 ```bash
 # Create everything
 bash bootstrap/bootstrap.sh -create <github-username>/<repo>
+```
 
+![bootstrap_create](./images/bootstrap_create.png)
+
+```bash
 # Tear everything down
 bash bootstrap/bootstrap.sh -destroy
 ```
+
+![bootstrap_destroy](./images/bootstrap_destroy.png)
