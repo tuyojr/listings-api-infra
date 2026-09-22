@@ -123,7 +123,7 @@ EOF
       --role-name "${name}" \
       --assume-role-policy-document "${trust_policy}" \
       --max-session-duration 3600 \
-      --tags Key=Project,Key=terraform Key=ManagedBy,Key=bootstrap \
+      --tags Key=Project,Value=terraform Key=ManagedBy,Value=bootstrap \
       >/dev/null
   fi
 }
