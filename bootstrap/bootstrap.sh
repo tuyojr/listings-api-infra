@@ -314,6 +314,9 @@ EOF
           "iam:GetRolePolicy", "iam:ListRolePolicies", "iam:AttachRolePolicy", "iam:DetachRolePolicy",
           "iam:ListAttachedRolePolicies", "iam:PassRole"
         ], Resource: ("arn:aws:iam::" + $account + ":role/listings-*") },
+      { Sid: "RdsServiceLinkedRole", Effect: "Allow", Action: "iam:CreateServiceLinkedRole",
+        Resource: ("arn:aws:iam::" + $account + ":role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS"),
+        Condition: { StringLike: { "iam:AWSServiceName": "rds.amazonaws.com" } } },
       { Sid: "StsIdentity", Effect: "Allow", Action: "sts:GetCallerIdentity", Resource: "*" }
     ]
   }')
