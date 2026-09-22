@@ -50,6 +50,9 @@ import {
   id = "igw-0b32e95ae9d37d6a2"
 }
 
+# count-based resources can't use for_each/each.key on the import block
+# (Terraform requires the target itself to use for_each for that) - each
+# instance needs its own block with a literal index.
 import {
   to = module.network.aws_subnet.public[0]
   id = "subnet-0a996c7037c1744f9" # us-east-1a
@@ -121,33 +124,16 @@ import {
 }
 
 import {
-  to = module.network.aws_vpc_endpoint.interface["ecr.api"]
-  id = "vpce-06ca99772d58958d9"
-}
-
-import {
-  to = module.network.aws_vpc_endpoint.interface["ecr.dkr"]
-  id = "vpce-0348cbe6b1295bbb5"
-}
-
-import {
-  to = module.network.aws_vpc_endpoint.interface["secretsmanager"]
-  id = "vpce-0d802738cdc2573c2"
-}
-
-import {
-  to = module.network.aws_vpc_endpoint.interface["logs"]
-  id = "vpce-093e734d0cf47c9c5"
-}
-
-import {
-  to = module.network.aws_vpc_endpoint.interface["kms"]
-  id = "vpce-0aab07c9393c20071"
-}
-
-import {
-  to = module.network.aws_vpc_endpoint.interface["sts"]
-  id = "vpce-036de36787bfb45ea"
+  for_each = {
+    "ecr.api"        = "vpce-06ca99772d58958d9"
+    "ecr.dkr"        = "vpce-0348cbe6b1295bbb5"
+    "secretsmanager" = "vpce-0d802738cdc2573c2"
+    "logs"           = "vpce-093e734d0cf47c9c5"
+    "kms"            = "vpce-0aab07c9393c20071"
+    "sts"            = "vpce-036de36787bfb45ea"
+  }
+  to = module.network.aws_vpc_endpoint.interface[each.key]
+  id = each.value
 }
 
 import {
@@ -212,28 +198,15 @@ import {
 }
 
 import {
-  to = module.secrets.aws_secretsmanager_secret.this["auth_db_password"]
-  id = "arn:aws:secretsmanager:us-east-1:603227569238:secret:auth_db_password-bX5lA8"
-}
-
-import {
-  to = module.secrets.aws_secretsmanager_secret.this["auth_db_migrate_password"]
-  id = "arn:aws:secretsmanager:us-east-1:603227569238:secret:auth_db_migrate_password-ONs7G5"
-}
-
-import {
-  to = module.secrets.aws_secretsmanager_secret.this["listing_db_password"]
-  id = "arn:aws:secretsmanager:us-east-1:603227569238:secret:listing_db_password-CTog2B"
-}
-
-import {
-  to = module.secrets.aws_secretsmanager_secret.this["listing_db_migrate_password"]
-  id = "arn:aws:secretsmanager:us-east-1:603227569238:secret:listing_db_migrate_password-KIQ5cZ"
-}
-
-import {
-  to = module.secrets.aws_secretsmanager_secret.this["jwt_secret_key"]
-  id = "arn:aws:secretsmanager:us-east-1:603227569238:secret:jwt_secret_key-JE0Iis"
+  for_each = {
+    "auth_db_password"            = "arn:aws:secretsmanager:us-east-1:603227569238:secret:auth_db_password-bX5lA8"
+    "auth_db_migrate_password"    = "arn:aws:secretsmanager:us-east-1:603227569238:secret:auth_db_migrate_password-ONs7G5"
+    "listing_db_password"         = "arn:aws:secretsmanager:us-east-1:603227569238:secret:listing_db_password-CTog2B"
+    "listing_db_migrate_password" = "arn:aws:secretsmanager:us-east-1:603227569238:secret:listing_db_migrate_password-KIQ5cZ"
+    "jwt_secret_key"              = "arn:aws:secretsmanager:us-east-1:603227569238:secret:jwt_secret_key-JE0Iis"
+  }
+  to = module.secrets.aws_secretsmanager_secret.this[each.key]
+  id = each.value
 }
 
 # module.auth_db
@@ -285,23 +258,15 @@ import {
 }
 
 import {
-  to = module.ecr.aws_ecr_repository.this["auth-service"]
-  id = "auth-service"
+  for_each = toset(["auth-service", "listings-service"])
+  to       = module.ecr.aws_ecr_repository.this[each.key]
+  id       = each.value
 }
 
 import {
-  to = module.ecr.aws_ecr_repository.this["listings-service"]
-  id = "listings-service"
-}
-
-import {
-  to = module.ecr.aws_ecr_lifecycle_policy.this["auth-service"]
-  id = "auth-service"
-}
-
-import {
-  to = module.ecr.aws_ecr_lifecycle_policy.this["listings-service"]
-  id = "listings-service"
+  for_each = toset(["auth-service", "listings-service"])
+  to       = module.ecr.aws_ecr_lifecycle_policy.this[each.key]
+  id       = each.value
 }
 
 # module.ecs
@@ -337,23 +302,21 @@ import {
 }
 
 import {
-  to = module.iam.aws_iam_role.task["auth"]
-  id = "listings-dev-task-auth"
+  for_each = {
+    "auth"     = "listings-dev-task-auth"
+    "listings" = "listings-dev-task-listings"
+  }
+  to = module.iam.aws_iam_role.task[each.key]
+  id = each.value
 }
 
 import {
-  to = module.iam.aws_iam_role.task["listings"]
-  id = "listings-dev-task-listings"
-}
-
-import {
-  to = module.iam.aws_iam_role_policy.task_secrets["auth"]
-  id = "listings-dev-task-auth:secrets-read"
-}
-
-import {
-  to = module.iam.aws_iam_role_policy.task_secrets["listings"]
-  id = "listings-dev-task-listings:secrets-read"
+  for_each = {
+    "auth"     = "listings-dev-task-auth:secrets-read"
+    "listings" = "listings-dev-task-listings:secrets-read"
+  }
+  to = module.iam.aws_iam_role_policy.task_secrets[each.key]
+  id = each.value
 }
 
 # module.auth_service
@@ -415,11 +378,10 @@ import {
 }
 
 import {
-  to = module.alb.aws_lb_listener_rule.service["auth"]
-  id = "arn:aws:elasticloadbalancing:us-east-1:603227569238:listener-rule/app/listings-dev-alb/0de70e4af83be032/c57cc34067b93128/0eb69780e8495cc5"
-}
-
-import {
-  to = module.alb.aws_lb_listener_rule.service["listings"]
-  id = "arn:aws:elasticloadbalancing:us-east-1:603227569238:listener-rule/app/listings-dev-alb/0de70e4af83be032/c57cc34067b93128/9f4282c3e5fa0f73"
+  for_each = {
+    "auth"     = "arn:aws:elasticloadbalancing:us-east-1:603227569238:listener-rule/app/listings-dev-alb/0de70e4af83be032/c57cc34067b93128/0eb69780e8495cc5"
+    "listings" = "arn:aws:elasticloadbalancing:us-east-1:603227569238:listener-rule/app/listings-dev-alb/0de70e4af83be032/c57cc34067b93128/9f4282c3e5fa0f73"
+  }
+  to = module.alb.aws_lb_listener_rule.service[each.key]
+  id = each.value
 }
