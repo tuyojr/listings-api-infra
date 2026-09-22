@@ -3,7 +3,7 @@ name: Terraform Plan
 on:
   pull_request:
     paths:
-      - "utilities/**"
+      - "modules/**"
       - "environments/**"
       - ".github/workflows/terraform-plan.yml"
   workflow_dispatch:
