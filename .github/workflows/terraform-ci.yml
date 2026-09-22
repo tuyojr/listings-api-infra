@@ -1,0 +1,95 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    paths:
+      - "utilities/**"
+      - "environments/**"
+      - ".tflint.hcl"
+      - ".github/workflows/terraform-ci.yml"
+  push:
+    branches: [main, dev]
+    paths:
+      - "utilities/**"
+      - "environments/**"
+      - ".tflint.hcl"
+      - ".github/workflows/terraform-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_VERSION: "1.16.0"
+
+jobs:
+  terraform-checks:
+    name: Terraform Lint, Format, Validate, Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+
+      - name: Verify tool versions
+        run: |
+          terraform version
+          tflint --version
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive -diff
+
+      - name: Terraform Init and Validate
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t tf_dirs < <(find utilities environments -type f -name '*.tf' -not -path '*/examples/*' -printf '%h\n' | sort -u)
+
+          if [ "${#tf_dirs[@]}" -eq 0 ]; then
+            echo "No Terraform directories found."
+            exit 0
+          fi
+
+          for dir in "${tf_dirs[@]}"; do
+            echo "Initializing and validating: ${dir}"
+            terraform -chdir="${dir}" init -backend=false -input=false -no-color
+            terraform -chdir="${dir}" validate -no-color
+            echo "::endgroup::
+          done
+
+      - name: Install TFLint plugins
+        run: tflint --init --config="$(pwd)/.tflint.hcl"
+
+      - name: TFLint
+        id: tflint
+        run: tflint --recursive --config="$(pwd)/.tflint.hcl" --format=compact
+
+      - name: Checkov Security Scan
+        id: checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: environments
+          framework: terraform
+          output_format: cli
+          output_bc_ids: true
+          soft_fail: false
