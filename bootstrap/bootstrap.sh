@@ -98,8 +98,11 @@ create_role() {
   local sub_claims=("$@")
   local trust_policy
   local sub_json
+  local repo_json
 
   sub_json=$(printf '%s\n' "${sub_claims[@]}" | jq -R . | jq -s .)
+
+  repo_json=$(printf '%s\n' "${GITHUB_REPO}" "${REPO_PATTERN}" | jq -R . | jq -s .)
 
   trust_policy=$(cat <<EOF
 {
@@ -113,7 +116,7 @@ create_role() {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
       },
       "StringLike": {
-        "token.actions.githubusercontent.com:repository": "${REPO_PATTERN}",
+        "token.actions.githubusercontent.com:repository": ${repo_json},
         "token.actions.githubusercontent.com:sub": ${sub_json}
       }
     }
