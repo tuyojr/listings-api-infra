@@ -198,10 +198,6 @@ module "listings_service" {
   tags = local.tags
 }
 
-# One-off task definitions for scripts/bootstrap_db_roles.py in the app
-# repo, run manually via db-bootstrap.yml + `aws ecs run-task` when a
-# database is first created (RDS has no init-script equivalent for the
-# app-level roles these services expect). See modules/db_bootstrap.
 module "db_bootstrap" {
   source = "../../modules/db_bootstrap"
 

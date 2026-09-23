@@ -1,9 +1,5 @@
 data "aws_region" "current" {}
 
-# One-off Fargate tasks, not services: there's no aws_ecs_service here.
-# Each task definition overrides the service image's normal command to run
-# scripts/bootstrap_db_roles.py
-
 resource "aws_cloudwatch_log_group" "db_bootstrap" {
   for_each = var.tasks
 
@@ -35,7 +31,10 @@ resource "aws_ecs_task_definition" "db_bootstrap" {
 
       environment = concat(
         [for k, v in each.value.environment_vars : { name = k, value = v }],
-        [{ name = "RDS_MASTER_SECRET_ARN", value = each.value.master_secret_arn }]
+        [
+          { name = "RDS_MASTER_SECRET_ARN", value = each.value.master_secret_arn },
+          { name = "PYTHONPATH", value = "/app" },
+        ]
       )
 
       logConfiguration = {
