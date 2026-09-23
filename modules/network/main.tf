@@ -367,3 +367,12 @@ resource "aws_security_group_rule" "rds_ingress_from_tasks" {
   source_security_group_id = aws_security_group.tasks.id
   description              = "Postgres from ECS tasks"
 }
+resource "aws_security_group_rule" "tasks_egress_to_s3" {
+  security_group_id = aws_security_group.tasks.id
+  type              = "egress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = aws_vpc_endpoint.s3.cidr_blocks
+  description       = "HTTPS to S3 (ECR image layers) via VPC gateway endpoint"
+}
