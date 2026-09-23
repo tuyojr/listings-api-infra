@@ -382,9 +382,11 @@ EOF
           ], Resource: "*" },
         { Sid: "EcsUpdateService", Effect: "Allow", Action: "ecs:UpdateService",
           Resource: ("arn:aws:ecs:" + $region + ":" + $account + ":service/listings-dev-cluster/*") },
-        { Sid: "EcsRunDbBootstrapTask", Effect: "Allow", Action: "ecs:RunTask", Resource: [
+        { Sid: "EcsRunTask", Effect: "Allow", Action: "ecs:RunTask", Resource: [
             ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/listings-dev-db-bootstrap-auth:*"),
-            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/listings-dev-db-bootstrap-listings:*")
+            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/listings-dev-db-bootstrap-listings:*"),
+            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/auth-service:*"),
+            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/listings-service:*")
           ] },
         { Sid: "DescribeNetworkForRunTask", Effect: "Allow", Action: [
             "ec2:DescribeSubnets", "ec2:DescribeSecurityGroups"
