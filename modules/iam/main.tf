@@ -1,4 +1,5 @@
 data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
 # Used by the ECS agent itself to pull the image from ECR and write logs
 # to CloudWatch. It does NOT need Secrets Manager access: the application
@@ -93,6 +94,76 @@ resource "aws_iam_role_policy" "task_secrets" {
         Effect   = "Allow"
         Action   = "kms:Decrypt"
         Resource = var.secrets_kms_key_arn
+      },
+    ]
+  })
+}
+
+# A separate role for the one-off db-bootstrap task (modules/db_bootstrap),
+# not a permission added to aws_iam_role.task above
+resource "aws_iam_role" "db_bootstrap_task" {
+  for_each = var.db_bootstrap_master_secret_arns
+
+  name = "${var.name_prefix}-task-db-bootstrap-${each.key}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+      Condition = {
+        StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id }
+      }
+    }]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy" "db_bootstrap_task_secrets" {
+  for_each = var.db_bootstrap_master_secret_arns
+
+  name = "secrets-read"
+  role = aws_iam_role.db_bootstrap_task[each.key].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadAppSecrets"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+        ]
+        Resource = var.services[each.key].secret_arns
+      },
+      {
+        Sid      = "DecryptAppSecrets"
+        Effect   = "Allow"
+        Action   = "kms:Decrypt"
+        Resource = var.secrets_kms_key_arn
+      },
+      {
+        Sid    = "ReadMasterSecret"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+        ]
+        Resource = each.value
+      },
+      {
+        # The RDS-managed master secret is encrypted with the AWS-owned
+        # aws/secretsmanager key
+        Sid      = "DecryptMasterSecret"
+        Effect   = "Allow"
+        Action   = "kms:Decrypt"
+        Resource = "*"
+        Condition = {
+          StringEquals = { "kms:ViaService" = "secretsmanager.${data.aws_region.current.region}.amazonaws.com" }
+        }
       },
     ]
   })

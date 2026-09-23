@@ -380,10 +380,19 @@ EOF
           ], Resource: "*" },
         { Sid: "EcsUpdateService", Effect: "Allow", Action: "ecs:UpdateService",
           Resource: ("arn:aws:ecs:" + $region + ":" + $account + ":service/listings-dev-cluster/*") },
+        { Sid: "EcsRunDbBootstrapTask", Effect: "Allow", Action: "ecs:RunTask", Resource: [
+            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/listings-dev-db-bootstrap-auth:*"),
+            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/listings-dev-db-bootstrap-listings:*")
+          ] },
+        { Sid: "DescribeNetworkForRunTask", Effect: "Allow", Action: [
+            "ec2:DescribeSubnets", "ec2:DescribeSecurityGroups"
+          ], Resource: "*" },
         { Sid: "PassEcsRoles", Effect: "Allow", Action: "iam:PassRole", Resource: [
             ("arn:aws:iam::" + $account + ":role/listings-dev-task-auth"),
             ("arn:aws:iam::" + $account + ":role/listings-dev-task-listings"),
-            ("arn:aws:iam::" + $account + ":role/listings-dev-ecs-task-execution")
+            ("arn:aws:iam::" + $account + ":role/listings-dev-ecs-task-execution"),
+            ("arn:aws:iam::" + $account + ":role/listings-dev-task-db-bootstrap-auth"),
+            ("arn:aws:iam::" + $account + ":role/listings-dev-task-db-bootstrap-listings")
           ] },
         { Sid: "SecretsWrite", Effect: "Allow", Action: [
             "secretsmanager:PutSecretValue", "secretsmanager:DescribeSecret"
