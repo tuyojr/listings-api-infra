@@ -70,8 +70,9 @@ module "listings_db" {
 module "ecr" {
   source = "../../modules/ecr"
 
-  name_prefix = local.name_prefix
-  repo_names  = ["auth-service", "listings-service"]
+  name_prefix  = local.name_prefix
+  repo_names   = ["auth-service", "listings-service"]
+  force_delete = true
 
   tags = local.tags
 }

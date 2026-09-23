@@ -340,7 +340,7 @@ EOF
           "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:TagRole", "iam:UntagRole",
           "iam:UpdateRole", "iam:UpdateAssumeRolePolicy", "iam:PutRolePolicy", "iam:DeleteRolePolicy",
           "iam:GetRolePolicy", "iam:ListRolePolicies", "iam:AttachRolePolicy", "iam:DetachRolePolicy",
-          "iam:ListAttachedRolePolicies", "iam:PassRole"
+          "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole", "iam:PassRole"
         ], Resource: ("arn:aws:iam::" + $account + ":role/listings-*") },
       { Sid: "RdsServiceLinkedRole", Effect: "Allow", Action: "iam:CreateServiceLinkedRole",
         Resource: ("arn:aws:iam::" + $account + ":role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS"),

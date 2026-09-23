@@ -8,6 +8,12 @@ variable "repo_names" {
   description = "ECR repository names"
 }
 
+variable "force_delete" {
+  type        = bool
+  description = "Allow deleting a repository that still contains images. False everywhere except dev, where the workflow that builds these repositories also has a matching destroy workflow."
+  default     = false
+}
+
 variable "untagged_expiry_days" {
   type        = number
   description = "Days before untagged images expire"
