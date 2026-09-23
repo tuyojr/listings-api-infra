@@ -20,11 +20,18 @@ This is used for a one-time setup on each AWS account. It ccreates:
 ## Usage
 
 ```bash
-# Create everything
+# Old method of creating bootstrap resources
 bash bootstrap/bootstrap.sh -create <github-username>/<repo>
 ```
 
-![bootstrap_create](./images/bootstrap_create.png)
+![bootstrap_old_create_for_infra_only](./images/bootstrap_create.png)
+
+```bash
+# New method of creating bootstrap resources, with app role included
+bash bootstrap/bootstrap.sh -create <github-username>/<infra-repo> <github-username>/<app-repo>
+```
+
+![bootstrap_new_create_for_infra_and_app](./images/bootstrap_create_with_app_role.png)
 
 ```bash
 # Tear everything down
