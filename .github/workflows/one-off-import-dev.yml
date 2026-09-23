@@ -46,23 +46,13 @@ jobs:
             -backend-config="use_lockfile=true" \
             -no-color
 
-      - name: Terraform import
+      - name: Terraform apply (targeted import)
         working-directory: environments/dev
         run: |
           set -euo pipefail
 
-          terraform import -lock-timeout=5m \
-            'module.network.aws_subnet.public[1]' \
-            'subnet-0eeb04f9f48a9f5ee'
-
-          terraform import -lock-timeout=5m \
-            'module.network.aws_subnet.private[1]' \
-            'subnet-02458f62c976d5c21'
-
-          terraform import -lock-timeout=5m \
-            'module.network.aws_route_table_association.public[1]' \
-            'subnet-0eeb04f9f48a9f5ee/rtb-01a61f41053607047'
-
-          terraform import -lock-timeout=5m \
-            'module.network.aws_route_table_association.private[1]' \
-            'subnet-02458f62c976d5c21/rtb-06bc72c1f52ca9137'
+          terraform apply -auto-approve -lock-timeout=5m \
+            -target='module.network.aws_subnet.public[1]' \
+            -target='module.network.aws_subnet.private[1]' \
+            -target='module.network.aws_route_table_association.public[1]' \
+            -target='module.network.aws_route_table_association.private[1]'
