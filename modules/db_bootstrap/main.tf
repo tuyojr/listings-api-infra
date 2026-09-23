@@ -61,4 +61,8 @@ resource "aws_ecs_task_definition" "db_bootstrap" {
   ])
 
   tags = merge(var.tags, { Name = "${var.name_prefix}-db-bootstrap-${each.key}" })
+
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
 }

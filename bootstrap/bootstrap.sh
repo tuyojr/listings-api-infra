@@ -373,7 +373,9 @@ EOF
           ] },
         { Sid: "EcsRegisterTaskDef", Effect: "Allow", Action: "ecs:RegisterTaskDefinition", Resource: [
             ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/auth-service:*"),
-            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/listings-service:*")
+            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/listings-service:*"),
+            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/listings-dev-db-bootstrap-auth:*"),
+            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/listings-dev-db-bootstrap-listings:*")
           ] },
         { Sid: "EcsDescribe", Effect: "Allow", Action: [
             "ecs:DescribeTaskDefinition", "ecs:DescribeServices", "ecs:DescribeTasks"
