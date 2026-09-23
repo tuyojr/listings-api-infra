@@ -4,10 +4,13 @@
 #   1. S3 bucket for Terraform state
 #   2. KMS key for state encryption
 #   3. GitHub OIDC provider
-#   4. Three IAM roles assumable from GitHub Actions:
+#   4. Three IAM roles assumable from GitHub Actions in the infra repo:
 #      - terraform-plan        (any PR)
 #      - terraform-apply-dev   (environment: dev)
 #      - terraform-apply-prod  (environment: prod)
+#   5. Optionally, an app-deploy-dev role (environment: dev) assumable from
+#      the app repo's GitHub Actions, for pushing images to ECR and
+#      updating the dev ECS services - only created if an app repo is given.
 #
 # Safe to re-run since every step checks for existence of a resource first.
 #
@@ -18,24 +21,29 @@ set -euo pipefail
 
 usage() {
   cat <<EOF
-usage: $0 {-create|-destroy} [<github-username>/<github-repo>]
+usage: $0 {-create|-destroy} [<github-username>/<infra-repo>] [<github-username>/<app-repo>]
 
   -create   Provision the state bucket, KMS key, OIDC provider, and
-            IAM roles. Requires the GitHub repository identifier so the
-            role trust policies can be scoped to it.
+            IAM roles. Requires the infra repository identifier so the
+            terraform-* role trust policies can be scoped to it. If an
+            app repository identifier is also given, additionally
+            creates an app-deploy-dev role trusted for that repo's
+            'dev' GitHub Environment, for pushing to ECR and updating
+            the dev ECS services.
 
   -destroy  Tear down everything this script created. The KMS key is
             scheduled for deletion with the minimum 7-day pending window
             (AWS does not allow immediate key deletion).
 
   Examples:
-    $0 -create  tuyojr/listings-api
+    $0 -create  tuyojr/listings-api-infra tuyojr/listings-api
     $0 -destroy
 EOF
 }
 
 ACTION=""
 GITHUB_REPO=""
+APP_GITHUB_REPO=""
 
 for arg in "$@"; do
   case "$arg" in
@@ -48,12 +56,15 @@ for arg in "$@"; do
       exit 1
       ;;
     *)
-      if [ -n "${GITHUB_REPO}" ]; then
+      if [ -z "${GITHUB_REPO}" ]; then
+        GITHUB_REPO="$arg"
+      elif [ -z "${APP_GITHUB_REPO}" ]; then
+        APP_GITHUB_REPO="$arg"
+      else
         echo "error: unexpected extra argument: $arg" >&2
         usage >&2
         exit 1
       fi
-      GITHUB_REPO="$arg"
       ;;
   esac
 done
@@ -65,7 +76,7 @@ if [ -z "${ACTION}" ]; then
 fi
 
 if [ "${ACTION}" = "create" ] && [ -z "${GITHUB_REPO}" ]; then
-  echo "error: -create requires <github-username>/<repo>" >&2
+  echo "error: -create requires <github-username>/<infra-repo>" >&2
   usage >&2
   exit 1
 fi
@@ -83,7 +94,13 @@ if [ -n "${GITHUB_REPO}" ]; then
   REPO_PATTERN="${GITHUB_OWNER}@*/${GITHUB_REPO_NAME}@*"
 fi
 
-ROLES=(terraform-plan terraform-apply-dev terraform-apply-prod)
+if [ -n "${APP_GITHUB_REPO}" ]; then
+  APP_GITHUB_OWNER="${APP_GITHUB_REPO%%/*}"
+  APP_GITHUB_REPO_NAME="${APP_GITHUB_REPO#*/}"
+  APP_REPO_PATTERN="${APP_GITHUB_OWNER}@*/${APP_GITHUB_REPO_NAME}@*"
+fi
+
+ROLES=(terraform-plan terraform-apply-dev terraform-apply-prod app-deploy-dev)
 
 echo "Account:      ${ACCOUNT_ID}"
 echo "Region:       ${AWS_REGION}"
@@ -94,7 +111,9 @@ echo
 
 create_role() {
   local name="$1"
-  shift
+  local repo="$2"
+  local repo_pattern="$3"
+  shift 3
   local sub_claims=("$@")
   local trust_policy
   local sub_json
@@ -102,7 +121,7 @@ create_role() {
 
   sub_json=$(printf '%s\n' "${sub_claims[@]}" | jq -R . | jq -s .)
 
-  repo_json=$(printf '%s\n' "${GITHUB_REPO}" "${REPO_PATTERN}" | jq -R . | jq -s .)
+  repo_json=$(printf '%s\n' "${repo}" "${repo_pattern}" | jq -R . | jq -s .)
 
   trust_policy=$(cat <<EOF
 {
@@ -239,12 +258,21 @@ EOF
     echo "==== OIDC provider created ===="
   fi
 
-  create_role "terraform-plan" \
+  create_role "terraform-plan" "${GITHUB_REPO}" "${REPO_PATTERN}" \
     "repo:${REPO_PATTERN}:pull_request" \
     "repo:${REPO_PATTERN}:ref:refs/heads/main" \
     "repo:${REPO_PATTERN}:ref:refs/heads/dev"
-  create_role "terraform-apply-dev"  "repo:${REPO_PATTERN}:environment:dev"
-  create_role "terraform-apply-prod" "repo:${REPO_PATTERN}:environment:prod"
+  create_role "terraform-apply-dev" "${GITHUB_REPO}" "${REPO_PATTERN}" \
+    "repo:${REPO_PATTERN}:environment:dev"
+  create_role "terraform-apply-prod" "${GITHUB_REPO}" "${REPO_PATTERN}" \
+    "repo:${REPO_PATTERN}:environment:prod"
+
+  if [ -n "${APP_GITHUB_REPO}" ]; then
+    create_role "app-deploy-dev" "${APP_GITHUB_REPO}" "${APP_REPO_PATTERN}" \
+      "repo:${APP_REPO_PATTERN}:environment:dev"
+  else
+    echo "*** no app repo given - skipping app-deploy-dev role ***"
+  fi
 
   # The plan role runs on PRs. On a public repo "anyone can open a PR",
   # so this role is deliberately narrow: broad read visibility (for an
@@ -323,6 +351,56 @@ EOF
 
   aws iam put-role-policy --role-name terraform-apply-dev  --policy-name "apply-resources" --policy-document "${apply_policy}"
   aws iam put-role-policy --role-name terraform-apply-prod --policy-name "apply-resources" --policy-document "${apply_policy}"
+
+  # Scoped to exactly what the app repo's CI needs to build and roll out a
+  # dev deploy: push images to the two ECR repos, register a new task
+  # definition revision for each service, and update the running service.
+  # Hardcodes "listings-dev-*" names/families since dev is the only
+  # environment with an app-deploy role
+  if [ -n "${APP_GITHUB_REPO}" ]; then
+    echo "░░ putting deploy-resources policy on app-deploy-dev ░░"
+    local deploy_policy
+    deploy_policy=$(jq -n --arg region "${AWS_REGION}" --arg account "${ACCOUNT_ID}" '{
+      Version: "2012-10-17",
+      Statement: [
+        { Sid: "EcrAuth", Effect: "Allow", Action: "ecr:GetAuthorizationToken", Resource: "*" },
+        { Sid: "EcrPush", Effect: "Allow", Action: [
+            "ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage",
+            "ecr:PutImage", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload"
+          ], Resource: [
+            ("arn:aws:ecr:" + $region + ":" + $account + ":repository/auth-service"),
+            ("arn:aws:ecr:" + $region + ":" + $account + ":repository/listings-service")
+          ] },
+        { Sid: "EcsRegisterTaskDef", Effect: "Allow", Action: "ecs:RegisterTaskDefinition", Resource: [
+            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/auth-service:*"),
+            ("arn:aws:ecs:" + $region + ":" + $account + ":task-definition/listings-service:*")
+          ] },
+        { Sid: "EcsDescribe", Effect: "Allow", Action: [
+            "ecs:DescribeTaskDefinition", "ecs:DescribeServices", "ecs:DescribeTasks"
+          ], Resource: "*" },
+        { Sid: "EcsUpdateService", Effect: "Allow", Action: "ecs:UpdateService",
+          Resource: ("arn:aws:ecs:" + $region + ":" + $account + ":service/listings-dev-cluster/*") },
+        { Sid: "PassEcsRoles", Effect: "Allow", Action: "iam:PassRole", Resource: [
+            ("arn:aws:iam::" + $account + ":role/listings-dev-task-auth"),
+            ("arn:aws:iam::" + $account + ":role/listings-dev-task-listings"),
+            ("arn:aws:iam::" + $account + ":role/listings-dev-ecs-task-execution")
+          ] },
+        { Sid: "SecretsWrite", Effect: "Allow", Action: [
+            "secretsmanager:PutSecretValue", "secretsmanager:DescribeSecret"
+          ], Resource: [
+            ("arn:aws:secretsmanager:" + $region + ":" + $account + ":secret:auth_db_password*"),
+            ("arn:aws:secretsmanager:" + $region + ":" + $account + ":secret:auth_db_migrate_password*"),
+            ("arn:aws:secretsmanager:" + $region + ":" + $account + ":secret:listing_db_password*"),
+            ("arn:aws:secretsmanager:" + $region + ":" + $account + ":secret:listing_db_migrate_password*"),
+            ("arn:aws:secretsmanager:" + $region + ":" + $account + ":secret:jwt_secret_key*")
+          ] },
+        { Sid: "SecretsKmsViaSecretsManager", Effect: "Allow", Action: ["kms:GenerateDataKey", "kms:Decrypt"], Resource: "*",
+          Condition: { StringEquals: { "kms:ViaService": ("secretsmanager." + $region + ".amazonaws.com") } } }
+      ]
+    }')
+
+    aws iam put-role-policy --role-name app-deploy-dev --policy-name "deploy-resources" --policy-document "${deploy_policy}"
+  fi
 }
 
 destroy() {
@@ -474,6 +552,16 @@ if [ "${ACTION}" = "create" ]; then
   echo "dev currently runs the ALB on plain HTTP (no ACM certificate available)."
   echo "When prod gets its own apply workflow, it will need ACM_CERTIFICATE_ARN"
   echo "set as a secret on the 'prod' GitHub Environment."
+
+  if [ -n "${APP_GITHUB_REPO}" ]; then
+    echo
+    echo "In the app repo (${APP_GITHUB_REPO}), set this as a SECRET on the"
+    echo "'dev' GitHub Environment (Settings --> Environments --> dev):"
+    echo "-  AWS_DEPLOY_ROLE_ARN     = arn:aws:iam::${ACCOUNT_ID}:role/app-deploy-dev"
+    echo
+    echo "And this as a repo VARIABLE:"
+    echo "-  AWS_REGION              = ${AWS_REGION}"
+  fi
 fi
 
 if [ "${ACTION}" = "destroy" ]; then
