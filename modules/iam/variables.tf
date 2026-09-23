@@ -15,6 +15,12 @@ variable "secrets_kms_key_arn" {
   description = "KMS key ARN used to encrypt the secrets referenced in var.services - granted kms:Decrypt on each task role"
 }
 
+variable "db_bootstrap_master_secret_arns" {
+  type        = map(string)
+  description = "Map of service name to the RDS-managed master secret ARN for its database. Granted only to a dedicated db-bootstrap task role per key, never to the regular task role in var.services."
+  default     = {}
+}
+
 variable "ecr_kms_key_arn" {
   type        = string
   description = "KMS key ARN used to encrypt the ECR repositories - granted kms:Decrypt on the execution role, required for ECS to pull CMK-encrypted images"

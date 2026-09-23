@@ -112,6 +112,11 @@ module "iam" {
   secrets_kms_key_arn = module.secrets.kms_key_arn
   ecr_kms_key_arn     = module.ecr.kms_key_arn
 
+  db_bootstrap_master_secret_arns = {
+    auth     = module.auth_db.master_secret_arn
+    listings = module.listings_db.master_secret_arn
+  }
+
   tags = local.tags
 }
 
@@ -189,6 +194,56 @@ module "listings_service" {
   }
 
   health_check_path = "/health"
+
+  tags = local.tags
+}
+
+# One-off task definitions for scripts/bootstrap_db_roles.py in the app
+# repo, run manually via db-bootstrap.yml + `aws ecs run-task` when a
+# database is first created (RDS has no init-script equivalent for the
+# app-level roles these services expect). See modules/db_bootstrap.
+module "db_bootstrap" {
+  source = "../../modules/db_bootstrap"
+
+  name_prefix        = local.name_prefix
+  execution_role_arn = module.iam.execution_role_arn
+
+  tasks = {
+    auth = {
+      task_role_arn     = module.iam.db_bootstrap_task_role_arns["auth"]
+      image_uri         = "${module.ecr.repository_urls["auth-service"]}:latest"
+      cpu               = 256
+      memory            = 512
+      master_secret_arn = module.auth_db.master_secret_arn
+      environment_vars = {
+        ENV                  = "production"
+        AWS_REGION           = var.aws_region
+        DB_SSL_MODE          = "require"
+        AUTH_DB_HOST         = module.auth_db.address
+        AUTH_DB_PORT         = tostring(module.auth_db.port)
+        AUTH_DB_NAME         = "auth"
+        AUTH_DB_USER         = "auth_rw"
+        AUTH_DB_MIGRATE_USER = "auth_migrate"
+      }
+    }
+    listings = {
+      task_role_arn     = module.iam.db_bootstrap_task_role_arns["listings"]
+      image_uri         = "${module.ecr.repository_urls["listings-service"]}:latest"
+      cpu               = 256
+      memory            = 512
+      master_secret_arn = module.listings_db.master_secret_arn
+      environment_vars = {
+        ENV                     = "production"
+        AWS_REGION              = var.aws_region
+        DB_SSL_MODE             = "require"
+        LISTING_DB_HOST         = module.listings_db.address
+        LISTING_DB_PORT         = tostring(module.listings_db.port)
+        LISTING_DB_NAME         = "listings"
+        LISTING_DB_USER         = "listing_rw"
+        LISTING_DB_MIGRATE_USER = "listing_migrate"
+      }
+    }
+  }
 
   tags = local.tags
 }
