@@ -80,7 +80,7 @@ import {
 
 import {
   to = module.network.aws_nat_gateway.main[0]
-  id = "nat-078e66af2c3314999"
+  id = "nat-0b86662618d27010a" # replacement created after the original was destroyed by a botched -target apply, see git history
 }
 
 import {
