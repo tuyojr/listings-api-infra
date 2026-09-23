@@ -39,6 +39,10 @@ PR opened -> Terraform Plan (comments the diff) -> review -> merge -> Terraform 
 ![terraform_plan_pr_comment](./images/terraform_plan_pr_comment.png)
 ![terraform_apply_dev_run](./images/terraform_apply_dev_run.png)
 
+Tearing dev down is manual and separate from that flow: [terraform-destroy-dev.yml](./.github/workflows/terraform-destroy-dev.yml), triggered from the Actions tab, not on any push or PR. It requires typing the exact phrase `destroy dev` into the trigger form before it runs `terraform plan -destroy` and applies it. Dev's RDS instances have `deletion_protection = false` and `skip_final_snapshot = true`, so this is unrecoverable, no snapshot to fall back on. Reuses the same `terraform-apply-dev` role and concurrency group as the apply workflow, so the two can't run against the same state at once.
+
+![terraform_destroy_dev_run](./images/terraform_destroy_dev_run.png)
+
 ## App deployment workflow
 
 Pushing to `main` in the app repo runs its [CI](https://github.com/tuyojr/listings-api/actions/workflows/ci.yml) workflow: path-filtered lint/security/build/scan per service, image pushed to GHCR if it's a real push (not a PR). Once CI succeeds, [deploy-dev.yml](https://github.com/tuyojr/listings-api/actions/workflows/deploy-dev.yml) picks up automatically:

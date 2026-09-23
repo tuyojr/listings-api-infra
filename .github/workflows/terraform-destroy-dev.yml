@@ -1,0 +1,87 @@
+name: Terraform Destroy (dev)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy dev" to confirm - this deletes real dev infrastructure, including both RDS instances with no final snapshot'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+# Shares a concurrency group with Terraform Apply (dev) so the two can never run against the same state at once.
+concurrency:
+  group: terraform-apply-dev
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_VERSION: "1.16.0"
+
+jobs:
+  confirm:
+    name: Confirm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation phrase
+        run: |
+          if [ "${{ inputs.confirm }}" != "destroy dev" ]; then
+            echo "::error::Confirmation phrase did not match. Type exactly: destroy dev"
+            exit 1
+          fi
+
+  destroy:
+    name: Destroy dev
+    needs: confirm
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ secrets.TF_APPLY_DEV_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gha-tf-destroy-dev-${{ github.run_id }}
+          mask-aws-account-id: true
+          role-duration-seconds: 3600
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: environments/dev
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=dev/terraform.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="kms_key_id=${{ secrets.TF_STATE_KMS_KEY }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true" \
+            -no-color
+
+      - name: Terraform plan destroy
+        working-directory: environments/dev
+        run: |
+          terraform plan \
+            -destroy \
+            -lock-timeout=5m \
+            -no-color \
+            -out=tfplan
+
+      - name: Terraform destroy
+        working-directory: environments/dev
+        run: terraform apply -lock-timeout=5m -no-color -auto-approve tfplan
